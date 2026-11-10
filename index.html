@@ -28,7 +28,7 @@ body.nav #plan{display:none}
 .brand{position:absolute;top:calc(env(safe-area-inset-top) + 66px);right:14px;font-weight:800;font-size:13px;color:var(--gold);letter-spacing:.5px;text-shadow:0 1px 6px #000}
 #q{flex:1;height:50px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--txt);font:500 16px 'Tajawal',sans-serif;padding:0 16px;outline:none;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 #q:focus{border-color:var(--gold)}
-#btnMe{width:50px;height:50px;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:22px;color:var(--gold)}
+#btnMe,#btnSat{width:50px;height:50px;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:22px;color:var(--gold)}
 #results{pointer-events:auto;position:absolute;top:calc(env(safe-area-inset-top) + 66px);left:12px;right:12px;max-height:52vh;overflow:auto;border-radius:16px;background:var(--card);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 #results:empty{display:none}
 .res{padding:12px 16px;border-bottom:1px solid var(--line)}
@@ -39,6 +39,14 @@ body.nav #plan{display:none}
 #dName{font-size:19px;font-weight:800;margin-bottom:4px}
 #dInfo{color:var(--mut);font-size:14px;margin-bottom:12px;min-height:20px}
 #dInfo b{color:var(--gold)}
+.carpick{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px}
+.carpick span{color:var(--mut)}
+.ct{flex:1;height:40px;border-radius:12px;background:#1b2230;border:1px solid var(--line);font-size:14px;font-weight:700}
+.ct.on{border-color:var(--gold);color:var(--gold);background:rgba(243,179,61,.12)}
+.cols{display:flex;gap:10px;margin-bottom:12px;justify-content:center}
+.cols button{width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.25)}
+.cols button.on{border-color:var(--gold);box-shadow:0 0 0 3px rgba(243,179,61,.35)}
+#btnSat.on{border-color:var(--gold)}
 .chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--txt);margin-bottom:12px}
 .chk input{width:20px;height:20px;accent-color:var(--gold)}
 .row{display:flex;gap:10px}
@@ -130,6 +138,7 @@ body.nav .me-dot{display:none}
   <div class="topbar">
     <input id="q" type="search" placeholder="وين تبي تروح في حائل؟" autocomplete="off" enterkeyhint="search">
     <button id="btnMe" title="موقعي">◎</button>
+    <button id="btnSat" title="قمر صناعي">🛰️</button>
   </div>
   <div id="results"></div>
   <div class="brand">ملاحة حائل 3D</div>
@@ -137,6 +146,12 @@ body.nav .me-dot{display:none}
   <div id="sheet" class="hidden">
     <div id="dName"></div>
     <div id="dInfo"></div>
+    <div class="carpick">
+      <span>سيارتك:</span>
+      <button class="ct" data-t="camry">كامري 2021</button>
+      <button class="ct" data-t="hilux">هايلكس 2016</button>
+    </div>
+    <div class="cols" id="cols"></div>
     <label class="chk"><input type="checkbox" id="optCam" checked> تشغيل كاميرا كشف السيارات (الكاميرا الخلفية)</label>
     <div class="row">
       <button id="btnGo" class="gold">ابدأ القيادة</button>
