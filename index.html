@@ -217,7 +217,8 @@ const CAR_BIN="DzLl7Zl5XzJI75V8MDLl7Zl5gTJI75V8TzLv7Zl51zFA7NZ2tTFA7NZ29jFK7NV2C
 const HAIL = [41.6907, 27.5219];                       // وسط مدينة حائل
 const BOX = { w: 38.3, s: 25.3, e: 44.4, n: 29.4 };      // حدود منطقة حائل للبحث
 const STYLE = 'https://tiles.openfreemap.org/styles/dark';
-const OSRM = 'https://router.project-osrm.org/route/v1/driving/';
+const ROUTERS = ['https://router.project-osrm.org/route/v1/driving/', 'https://routing.openstreetmap.de/routed-car/route/v1/driving/'];
+const OVERPASS = 'https://overpass-api.de/api/interpreter';
 const NOM = 'https://nominatim.openstreetmap.org/';
 const TFJS = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js';
 const COCO = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js';
@@ -569,7 +570,7 @@ async function reverseName(p) {
 
 /* ---------------- الوجهة والمسار ---------------- */
 async function setDest(p, name, rev = false) {
-  st.dest = { p, name };
+  st.dest = { p, name }; st.route = null; st.coords = []; st.limitOSM = null;
   if (!destMarker) destMarker = mkMarker({ color: '#ff3b3b' }).setLngLat(p).addTo(map);
   else destMarker.setLngLat(p);
   $('hint').classList.add('hidden'); $('sheet').classList.remove('hidden');
@@ -586,16 +587,38 @@ async function setDest(p, name, rev = false) {
   } catch (e) { $('dInfo').textContent = 'تعذّر حساب الطريق — جرّب وجهة ثانية'; }
 }
 async function getRoute(from, to) {
-  const url = `${OSRM}${from[0]},${from[1]};${to[0]},${to[1]}?overview=full&geometries=geojson&steps=true&annotations=maxspeed`;
-  const r = await fetch(url); const j = await r.json();
-  if (j.code !== 'Ok' || !j.routes || !j.routes.length) throw new Error(j.code);
-  return j.routes[0];
+  let lastErr;
+  for (const base of ROUTERS) {
+    const url = `${base}${from[0].toFixed(6)},${from[1].toFixed(6)};${to[0].toFixed(6)},${to[1].toFixed(6)}?overview=full&geometries=geojson&steps=true`;
+    try {
+      const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 12000);
+      const r = await fetch(url, { signal: ctl.signal }); clearTimeout(tm);
+      const j = await r.json();
+      if (j.code === 'Ok' && j.routes && j.routes.length) return j.routes[0];
+      lastErr = new Error(j.message || j.code);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('route');
+}
+/* حد السرعة من خريطة الشوارع المفتوحة (إذا متوفر للشارع) */
+let limBusy = false, limLast = 0;
+async function fetchLimit(p) {
+  if (limBusy || Date.now() - limLast < 15000) return;
+  limBusy = true; limLast = Date.now();
+  try {
+    const q = `[out:json][timeout:8];way(around:30,${p[1].toFixed(6)},${p[0].toFixed(6)})[highway][maxspeed];out tags 1;`;
+    const r = await fetch(`${OVERPASS}?data=${encodeURIComponent(q)}`); const j = await r.json();
+    const w = j.elements && j.elements[0];
+    let lim = null;
+    if (w && w.tags && w.tags.maxspeed) { const m = String(w.tags.maxspeed).match(/\d+/); if (m) lim = /mph/.test(w.tags.maxspeed) ? Math.round(+m[0] * 1.609) : +m[0]; }
+    st.limitOSM = lim;
+  } catch (e) {}
+  limBusy = false;
 }
 function setRoute(r) {
   st.route = r; st.coords = r.geometry.coordinates;
   st.cum = [0];
   for (let i = 1; i < st.coords.length; i++) st.cum.push(st.cum[i - 1] + dist(st.coords[i - 1], st.coords[i]));
-  st.maxs = (r.legs[0] && r.legs[0].annotation && r.legs[0].annotation.maxspeed) || [];
   st.steps = []; let from = 0;
   for (const leg of r.legs) for (const s of leg.steps) {
     const loc = s.maneuver.location; let bi = from, bd = 1e12;
@@ -679,9 +702,9 @@ function updateNav() {
   }
 
   // حد السرعة
-  const ms = st.maxs[st.idx];
-  let lim = null;
-  if (ms && ms.speed) lim = ms.unit === 'mph' ? Math.round(ms.speed * 1.609) : Math.round(ms.speed);
+  if (!st.sim && st.rawPos) fetchLimit(st.rawPos);
+  else if (st.sim) fetchLimit(pointAt(st.fixAlong));
+  const lim = st.limitOSM || null;
   if (lim !== st.limit) { st.limit = lim; setLimit(lim); }
   const over = lim && st.kmh > lim + 5;
   $('limit').classList.toggle('over', !!over);
@@ -745,7 +768,12 @@ function stopSim() { clearInterval(st.simTimer); st.simTimer = null; }
 
 /* ---------------- بدء وإنهاء الملاحة ---------------- */
 async function startNav(sim) {
-  if (!st.route) { toast('اختر وجهة أول'); return; }
+  if (!st.dest) { toast('اختر وجهة أول'); return; }
+  if (!st.route) {
+    toast('جاري حساب الطريق…');
+    try { setRoute(await getRoute(st.gps || HAIL, st.dest.p)); }
+    catch (e) { toast('ما قدرت أحسب الطريق — تأكد من الإنترنت وجرّب مرة ثانية', 5000); return; }
+  }
   if (!sim && !st.gps) { toast('لازم تسمح بالموقع (GPS) عشان تبدأ القيادة'); return; }
   if (!sim) { // نعيد حساب الطريق من مكانك الحالي
     try { setRoute(await getRoute(st.gps, st.dest.p)); } catch (e) {}
